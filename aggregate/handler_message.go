@@ -22,6 +22,9 @@ func HandleMessageEvent(ev *slack.MessageEvent, fromAPI *slack.Client, workspace
 		switch ev.SubType {
 		case "message_changed":
 			err = HandleMessageEdited(ev, fromAPI, workspace, toChannelName)
+			if err != nil {
+				log.Println(err)
+			}
 		case "message_deleted":
 			err = HandleMessageDeleted(ev, fromAPI, workspace, toChannelName)
 			if err != nil {
