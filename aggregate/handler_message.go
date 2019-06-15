@@ -1,6 +1,7 @@
 package aggregate
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"strings"
@@ -50,14 +51,20 @@ func HandleMessageEvent(ev *slack.MessageEvent, fromAPI *slack.Client, workspace
 }
 
 func HandleMessageDeleted(ev *slack.MessageEvent, fromAPI *slack.Client, workspace, toChannelName string) error {
-	d, err := store.GetSlackLog(workspace, ev.DeletedTimestamp)
-	if err != nil {
-		return err
+	oldLog := store.GetSlackLogFromCache(workspace, ev.DeletedTimestamp)
+	msg := ""
+
+	if oldLog != nil {
+		if countLines(oldLog.Body) == 1 {
+			msg = fmt.Sprintf("Original Text: %v", oldLog.Body)
+		} else {
+			msg = fmt.Sprintf("Original Text:\n%v", oldLog.Body)
+		}
+	} else {
+		msg = "Deleted unknown message"
 	}
 
-	msg := fmt.Sprintf("Original Text:\n%v", d.Body)
-
-	err = utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, msg, toChannelName)
+	err := utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, msg, toChannelName)
 	if err != nil {
 		return err
 	}
@@ -65,16 +72,42 @@ func HandleMessageDeleted(ev *slack.MessageEvent, fromAPI *slack.Client, workspa
 	return nil
 }
 
+func countLines(s string) int {
+	scanner := bufio.NewScanner(strings.NewReader(s))
+	lines := 0
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		lines++
+	}
+	return lines
+}
+
 func HandleMessageEdited(ev *slack.MessageEvent, fromAPI *slack.Client, workspace, toChannelName string) error {
-	d, err := store.GetSlackLog(workspace, ev.SubMessage.Timestamp)
-	if err != nil {
-		return err
+	oldLog := store.GetSlackLogFromCache(workspace, ev.SubMessage.Timestamp)
+	msg := ""
+
+	if oldLog != nil {
+		msg += "Edited from: "
+		if countLines(oldLog.Body) == 1 {
+			msg += oldLog.Body
+		} else {
+			msg += "\n"
+			msg += oldLog.Body
+		}
+	} else {
+		msg += "Edited from: (unknown)"
+	}
+	msg += "\n"
+
+	msg += "Edited to: "
+	if countLines(ev.SubMessage.Text) == 1 {
+		msg += ev.SubMessage.Text
+	} else {
+		msg += "\n"
+		msg += ev.SubMessage.Text
 	}
 
-	msg := fmt.Sprintf("Original Text:\n%v", d.Body)
-	msg += "\n\nEdited Text\n" + ev.SubMessage.Text
-
-	err = utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, msg, toChannelName)
+	err := utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, msg, toChannelName)
 	if err != nil {
 		return err
 	}
