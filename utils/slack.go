@@ -109,7 +109,7 @@ func PostMessageToChannel(toAPI, fromAPI *slack.Client, ev *slack.MessageEvent, 
 
 	isExist, err := checkExistChannel(toAPI, aggrChannelName)
 	if err != nil {
-		log.Println("[ERROR] postMessageToChannel is fail")
+		log.Println("[ERROR] postMessageToChannel failed during checkExistChannel")
 		return err
 	}
 
@@ -117,7 +117,7 @@ func PostMessageToChannel(toAPI, fromAPI *slack.Client, ev *slack.MessageEvent, 
 		// if channel is not exist, make channel
 		err = createNewChannel(toAPI, aggrChannelName)
 		if err != nil {
-			log.Println("[ERROR] postMessageToChannel is fail")
+			log.Println("[ERROR] postMessageToChannel failed during createNewChannel")
 			return err
 		}
 	}
@@ -141,7 +141,7 @@ func PostMessageToChannel(toAPI, fromAPI *slack.Client, ev *slack.MessageEvent, 
 	if msg != "" {
 		_, _, err := toAPI.PostMessage(aggrChannelName, slack.MsgOptionText(msg, false), slack.MsgOptionPostMessageParameters(param))
 		if err != nil {
-			log.Println("[ERROR] postMessageToChannel is fail")
+			log.Println("[ERROR] postMessageToChannel failed during PostMessage")
 			return err
 		}
 
@@ -153,7 +153,7 @@ func PostMessageToChannel(toAPI, fromAPI *slack.Client, ev *slack.MessageEvent, 
 		for _, attachment := range attachments {
 			_, _, err = toAPI.PostMessage(aggrChannelName, slack.MsgOptionPostMessageParameters(param), slack.MsgOptionAttachments(attachment))
 			if err != nil {
-				log.Println("[ERROR] postMessageToChannel is fail")
+				log.Println("[ERROR] postMessageToChannel failed during PostMessage (attachments)")
 				return err
 			}
 		}
