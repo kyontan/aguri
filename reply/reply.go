@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	reChannel     = regexp.MustCompile(`(\S+)@(\S+):(\S+)`)
+	reChannel     = regexp.MustCompile(`(\S+)@([cdg]):(\S+)`)
 	rePostChannel = regexp.MustCompile(`^(\S+)#(.*)$`)
 	rePostIM      = regexp.MustCompile(`^(\S+)@(.*)$`)
 	apiInstances  = map[string]*slack.Client{}
@@ -64,15 +64,52 @@ func getSlackApiInstance(workspaceName string) *slack.Client {
 func postReplyMessage(workspace string, ev *slack.MessageEvent, aggrChName string) error {
 	api := getSlackApiInstance(workspace)
 	logData := store.GetSlackLogFromCache(workspace, ev.ThreadTimestamp)
-	if logData == nil {
-		toAPI := store.GetConfigToAPI()
-		parentMsgLog, errFromAPI := store.GetSlackLogFromAPI(toAPI, workspace, aggrChName, ev.ThreadTimestamp)
+	channelToPost := ""
+	if logData != nil {
+		channelToPost = logData.Channel
+	} else {
+		log.Println("logData == nil, get from API")
+		toApi := store.GetConfigToAPI()
+		conversations, err := getConversations(toApi)
+		if err != nil {
+			return err
+		}
+		channelId := ""
+		for _, conversation := range *conversations {
+			if conversation.Name == aggrChName {
+				channelId = conversation.ID
+				break
+			}
+		}
 
+		if channelId == "" {
+			return fmt.Errorf("can't retrieve channelId of channel: %v", aggrChName)
+		}
+
+		parentMsg, errFromAPI := store.GetSlackMessageFromAPI(toApi, channelId, ev.ThreadTimestamp)
 		if errFromAPI != nil {
 			return errFromAPI
 		}
 
-		logData = parentMsgLog
+		userName := reChannel.FindStringSubmatch(parentMsg.Username)
+		if len(userName) != 4 {
+			return fmt.Errorf("can't parse userName: %v", parentMsg.Username)
+		}
+
+		channelType := userName[2] // c or d or g
+		channelName := userName[3]
+		switch channelType {
+		case "c":
+			channelToPost = "#" + channelName
+		case "g":
+			channelToPost = channelName
+		case "d":
+			userId, err := getUserIDfromDisplayName(api, channelName)
+			if err != nil {
+				return err
+			}
+			channelToPost = *userId
+		}
 	}
 
 	// Post
@@ -80,13 +117,11 @@ func postReplyMessage(workspace string, ev *slack.MessageEvent, aggrChName strin
 		AsUser: true,
 	}
 
-	_, _, err := api.PostMessage(logData.Channel, slack.MsgOptionText(ev.Text, false), slack.MsgOptionPostMessageParameters(param))
+	_, _, err := api.PostMessage(channelToPost, slack.MsgOptionText(ev.Text, false), slack.MsgOptionPostMessageParameters(param))
 	return err
 }
 
-func getConversations(workspace string) (*[]slack.Channel, error) {
-	api := getSlackApiInstance(workspace)
-
+func getConversations(api *slack.Client) (*[]slack.Channel, error) {
 	params := &slack.GetConversationsParameters{
 		Types:           []string{"public_channel", "private_channel"},
 		ExcludeArchived: "true",
@@ -127,7 +162,7 @@ func PostNewMessageToChannel(workspace string, ev *slack.MessageEvent) (bool, er
 	toApi := getSlackApiInstance(workspace)
 	fromApi := store.GetConfigToAPI()
 
-	conversations, err := getConversations(workspace)
+	conversations, err := getConversations(getSlackApiInstance(workspace))
 	if err != nil {
 		return true, err
 	}
@@ -176,6 +211,20 @@ func PostNewMessageToChannel(workspace string, ev *slack.MessageEvent) (bool, er
 	return true, err
 }
 
+func getUserIDfromDisplayName(api *slack.Client, name string) (*string, error) {
+	users, err := api.GetUsers()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, user := range users {
+		if user.Profile.DisplayName == name {
+			return &user.ID, nil
+		}
+	}
+	return nil, nil
+}
+
 func PostNewMessageToIM(workspace string, ev *slack.MessageEvent) (bool, error) {
 	postIMMatches := rePostIM.FindStringSubmatch(ev.Text)
 	if len(postIMMatches) != 3 { // [whole text, post_to, body]
@@ -188,30 +237,32 @@ func PostNewMessageToIM(workspace string, ev *slack.MessageEvent) (bool, error) 
 	toApi := getSlackApiInstance(workspace)
 	fromApi := store.GetConfigToAPI()
 
-	users, err := toApi.GetUsers()
+	userId, err := getUserIDfromDisplayName(toApi, postTo)
 	if err != nil {
 		return true, err
 	}
 
-	for _, user := range users {
-		if user.Profile.DisplayName == postTo {
-			param := slack.PostMessageParameters{
-				AsUser: true,
-			}
-			body := postIMMatches[2]
-			_, _, err := toApi.PostMessage(user.ID, slack.MsgOptionText(body, false), slack.MsgOptionPostMessageParameters(param))
-			_, _, err = fromApi.DeleteMessage(ev.Channel, ev.Timestamp)
-			return true, err
+	if userId == nil {
+		param := slack.PostMessageParameters{
+			Username: "Aguri",
 		}
+
+		msg := fmt.Sprintf("Not found username: %v", postTo)
+
+		_, _, err = fromApi.PostMessage(config.PrefixSlackChannel+workspace, slack.MsgOptionText(msg, false), slack.MsgOptionPostMessageParameters(param))
+		return true, err
 	}
 
 	param := slack.PostMessageParameters{
-		Username: "Aguri",
+		AsUser: true,
+	}
+	body := postIMMatches[2]
+	_, _, err = toApi.PostMessage(*userId, slack.MsgOptionText(body, false), slack.MsgOptionPostMessageParameters(param))
+	if err != nil {
+		return true, err
 	}
 
-	msg := fmt.Sprintf("Not found username: %v", postTo)
-
-	_, _, err = fromApi.PostMessage(config.PrefixSlackChannel+workspace, slack.MsgOptionText(msg, false), slack.MsgOptionPostMessageParameters(param))
+	_, _, err = fromApi.DeleteMessage(ev.Channel, ev.Timestamp)
 	return true, err
 }
 

@@ -42,9 +42,9 @@ func GetSlackLogFromCache(workspace, timestamp string) *LogData {
 	return &val
 }
 
-func GetSlackLogFromAPI(api *slack.Client, workspace, channel, timestamp string) (*LogData, error) {
+func GetSlackMessageFromAPI(api *slack.Client, channelId, timestamp string) (*slack.Message, error) {
 	params := &slack.GetConversationHistoryParameters{
-		ChannelID: channel,
+		ChannelID: channelId,
 		Latest:    timestamp,
 		Oldest:    timestamp,
 		Inclusive: true,
@@ -60,9 +60,5 @@ func GetSlackLogFromAPI(api *slack.Client, workspace, channel, timestamp string)
 		return nil, ErrSlackHistoryNotFound
 	}
 
-	msg := history.Messages[0]
-	return &LogData{
-		Channel: msg.Channel, // NOTE: this is not readable name
-		Body:    msg.Text,
-	}, nil
+	return &history.Messages[0], nil
 }
