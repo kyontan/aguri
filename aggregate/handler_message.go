@@ -30,8 +30,14 @@ func HandleMessageEvent(ev *slack.MessageEvent, fromAPI *slack.Client, workspace
 			if err != nil {
 				log.Println(err)
 			}
-		default:
+		case "":
 			err = utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, ev.Text, toChannelName)
+			if err != nil {
+				log.Println(err)
+			}
+		default:
+			text := "SubType: " + ev.SubType + "\n" + ev.Text
+			err = utils.PostMessageToChannel(store.GetConfigToAPI(), fromAPI, ev, text, toChannelName)
 			if err != nil {
 				log.Println(err)
 			}
