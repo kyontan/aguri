@@ -192,7 +192,7 @@ func PostNewMessageToChannel(workspace string, ev *slack.MessageEvent) (bool, er
 		_, _, err = fromApi.DeleteMessage(ev.Channel, ev.Timestamp)
 	} else if len(candidacy) == 0 {
 		param := slack.PostMessageParameters{
-			Username: "Aguri",
+			Username: "aguri",
 		}
 
 		msg := fmt.Sprintf("Not found channel: %v", postTo)
@@ -200,7 +200,7 @@ func PostNewMessageToChannel(workspace string, ev *slack.MessageEvent) (bool, er
 		_, _, err = fromApi.PostMessage(config.PrefixSlackChannel+workspace, slack.MsgOptionText(msg, false), slack.MsgOptionPostMessageParameters(param))
 	} else {
 		param := slack.PostMessageParameters{
-			Username: "Aguri",
+			Username: "aguri",
 		}
 
 		msg := fmt.Sprintf("Found multiple candidacies: %v", strings.Join(candidacy, ", "))
@@ -244,7 +244,7 @@ func PostNewMessageToIM(workspace string, ev *slack.MessageEvent) (bool, error) 
 
 	if userId == nil {
 		param := slack.PostMessageParameters{
-			Username: "Aguri",
+			Username: "aguri",
 		}
 
 		msg := fmt.Sprintf("Not found username: %v", postTo)
